@@ -229,6 +229,7 @@ func (s *server) DidOpen(
 ) error {
 	if isBufYAMLURI(params.TextDocument.URI) {
 		s.bufYAMLManager.Track(params.TextDocument.URI, params.TextDocument.Text)
+		s.bufYAMLManager.CheckIgnorePaths(params.TextDocument.URI)
 		return nil
 	}
 	if isBufGenYAMLURI(params.TextDocument.URI) {
@@ -257,6 +258,7 @@ func (s *server) DidChange(
 ) error {
 	if isBufYAMLURI(params.TextDocument.URI) {
 		s.bufYAMLManager.Track(params.TextDocument.URI, params.ContentChanges[0].Text)
+		s.bufYAMLManager.CheckIgnorePaths(params.TextDocument.URI)
 		return nil
 	}
 	if isBufGenYAMLURI(params.TextDocument.URI) {
