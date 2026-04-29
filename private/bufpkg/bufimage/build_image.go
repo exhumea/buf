@@ -128,8 +128,19 @@ func compileImage(
 		return nil, err
 	}
 
+	// Validate that there is a single result for all files.
+	if len(results) != 1 {
+		return nil, fmt.Errorf("expected a single result from query, instead got: %d", len(results))
+	}
+
+	// Check for fatal errors before processing diagnostics so that callers can
+	// inspect typed errors (e.g. DuplicateProtoPathError) via errors.As. Spanless
+	// diagnostics that accompany these fatal errors are suppressed in the loop below.
+	if results[0].Fatal != nil {
+		return nil, results[0].Fatal
+	}
+
 	var fileAnnotations []bufanalysis.FileAnnotation
-	var rawErrors []error
 	for _, diagnostic := range diagnostics.Diagnostics {
 		if diagnostic.Level() > report.Error {
 			// We only surface [report.Error] level or more severe diagnostics as build errors.
@@ -138,12 +149,9 @@ func compileImage(
 		}
 		primary := diagnostic.Primary()
 		if primary.IsZero() {
-			// Diagnostics without a source span (e.g. file-open errors such as
-			// DuplicateProtoPathError) cannot be represented as FileAnnotations.
-			// Surface them as raw errors so callers see the full message.
-			if diagnostic.File() != "" {
-				rawErrors = append(rawErrors, errors.New(diagnostic.Message()))
-			}
+			// Spanless diagnostics (e.g. from file-open errors like DuplicateProtoPathError)
+			// are companion messages to fatal errors already handled above. Suppress them here
+			// so their typed errors are preserved for callers rather than being lost as strings.
 			continue
 		}
 		start := primary.Location(primary.Start, length.Bytes)
@@ -174,20 +182,8 @@ func compileImage(
 			),
 		)
 	}
-	if len(rawErrors) > 0 {
-		return nil, errors.Join(rawErrors...)
-	}
 	if len(fileAnnotations) > 0 {
 		return nil, bufanalysis.NewFileAnnotationSet(fileAnnotations...)
-	}
-
-	// Validate that there is a single result for all files
-	if len(results) != 1 {
-		return nil, fmt.Errorf("expected a single result from query, instead got: %d", len(results))
-	}
-
-	if results[0].Fatal != nil {
-		return nil, results[0].Fatal
 	}
 	fds, resolver, err := resolverForFDS(results[0].Value)
 	if err != nil {
